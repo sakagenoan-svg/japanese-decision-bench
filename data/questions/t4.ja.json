@@ -1,0 +1,28 @@
+{
+  "task": "t4_ellipsis",
+  "lang": "ja",
+  "type": "choice",
+  "instructions": "個人間の物品交換に関する会話です。context はそれまでのやりとり、target は最後の発言です。target は、context で最後に発言した人の相手による発言です。target の発言者は、直前に相手から出された提案・依頼に対してどう応じていますか。",
+  "options": [
+    {
+      "label": "accept",
+      "key": "承諾",
+      "description": "直前の提案・依頼を受け入れている。"
+    },
+    {
+      "label": "reject",
+      "key": "拒否",
+      "description": "直前の提案・依頼を断っている。遠回しな断りを含む。"
+    },
+    {
+      "label": "question",
+      "key": "質問",
+      "description": "諾否を決める前に、確認や追加の情報を求めている。"
+    },
+    {
+      "label": "other",
+      "key": "その他",
+      "description": "上記のいずれでもない。保留、話題の転換、あいさつのみなど。"
+    }
+  ]
+}

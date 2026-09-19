@@ -1,0 +1,25 @@
+# --- private / never commit ---
+.private/
+.env
+.env.*
+!.env.example
+handoff.md
+
+# raw API output: publish only via bench.sanitize -> results/sanitized/
+results/raw/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

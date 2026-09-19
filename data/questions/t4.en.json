@@ -1,0 +1,28 @@
+{
+  "task": "t4_ellipsis",
+  "lang": "en",
+  "type": "choice",
+  "instructions": "This is a conversation about a peer-to-peer goods exchange. `context` is the preceding exchange and `target` is the final message. `target` is written by the other participant, not the last speaker in `context`. How does the author of `target` respond to the proposal or request the other person made just before?",
+  "options": [
+    {
+      "label": "accept",
+      "key": "accept",
+      "description": "Accepts the preceding proposal or request."
+    },
+    {
+      "label": "reject",
+      "key": "reject",
+      "description": "Declines the preceding proposal or request, including indirect refusals."
+    },
+    {
+      "label": "question",
+      "key": "question",
+      "description": "Asks for confirmation or more information before deciding."
+    },
+    {
+      "label": "other",
+      "key": "other",
+      "description": "None of the above, e.g. deferring, changing the topic, or only a greeting."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "task": "t1_moderation",
+  "lang": "en",
+  "type": "choice",
+  "instructions": "This is a message posted on a peer-to-peer goods exchange service. Which category best describes the message? Judge indirect wording and sarcasm by what the writer actually means.",
+  "options": [
+    {"label": "ok", "key": "ok", "description": "Normal communication, thanks, questions, or a legitimate complaint. Does not attack the other person, has no intent to deceive, and is not commercial promotion."},
+    {"label": "harassment", "key": "harassment", "description": "Insults, intimidates, or mocks the other person, including sarcasm, veiled digs, or threats phrased as politeness or compliments."},
+    {"label": "scam", "key": "scam", "description": "Tries to obtain money or information by deception, e.g. moving payment or contact off the platform, demanding prepayment, or asking for personal or account details."},
+    {"label": "resale_spam", "key": "resale_spam", "description": "Promotion or solicitation for resale-for-profit that departs from personal exchange: bulk listings, buying up stock, or reselling at inflated prices."}
+  ]
+}

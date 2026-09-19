@@ -1,0 +1,11 @@
+{
+  "task": "t2_politeness_anger",
+  "lang": "en",
+  "type": "score",
+  "instructions": "This is a message sent to a trading partner. How strong is the writer's anger? Judge by how dissatisfied the writer actually is, not by whether the wording is polite.",
+  "levels": [
+    {"value": 0, "description": "Neutral. No dissatisfaction expressed, or ordinary communication or thanks."},
+    {"value": 1, "description": "Dissatisfied but calm. Mentions a problem or disappointment in a measured way."},
+    {"value": 2, "description": "Strongly angry. Even if the wording is polite, strong indignation, protest, or an ultimatum is evident."}
+  ]
+}

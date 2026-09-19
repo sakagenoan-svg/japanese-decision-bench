@@ -1,0 +1,10 @@
+{
+  "task": "t5_noise",
+  "lang": "en",
+  "type": "binary",
+  "instructions": "Does the customer request a refund?",
+  "criteria": {
+    "true": "The customer asks for all or part of the money they paid to be returned.",
+    "false": "The customer does not ask for a refund (e.g. asks for an exchange, a resend, information, reports something, or says thanks)."
+  }
+}
