@@ -81,11 +81,11 @@ def test_flip_metrics():
         "t3-2": {"variant_of": "t1-1", "variant_type": "internet_slang"},
         "t3-3": {"variant_of": "t1-2", "variant_type": "hiragana"},
     }
-    originals = [_rec("t1-1", "t1", "ok", "ok", {"ok": 0.8, "scam": 0.2}, 0.8),
-                 _rec("t1-2", "t1", "scam", "ok", {"ok": 0.6, "scam": 0.4}, 0.6)]
-    variants = [_rec("t3-1", "t3", "ok", "ok", {"ok": 0.7, "scam": 0.3}, 0.7),
-                _rec("t3-2", "t3", "ok", "scam", {"ok": 0.4, "scam": 0.6}, 0.6),
-                _rec("t3-3", "t3", "scam", "ok", {"ok": 0.5, "scam": 0.5}, 0.5)]
+    originals = [_rec("t1-1", "t1", "ok", "ok", {"ok": 0.8, "scam_risk": 0.2}, 0.8),
+                 _rec("t1-2", "t1", "scam_risk", "ok", {"ok": 0.6, "scam_risk": 0.4}, 0.6)]
+    variants = [_rec("t3-1", "t3", "ok", "ok", {"ok": 0.7, "scam_risk": 0.3}, 0.7),
+                _rec("t3-2", "t3", "ok", "scam_risk", {"ok": 0.4, "scam_risk": 0.6}, 0.6),
+                _rec("t3-3", "t3", "scam_risk", "ok", {"ok": 0.5, "scam_risk": 0.5}, 0.5)]
     m = M.flip_metrics(variants, originals, examples)
     assert m["n"] == 3
     assert m["flip_rate"] == pytest.approx(1 / 3)
@@ -110,3 +110,31 @@ def test_bootstrap_ci_is_deterministic():
     assert M.bootstrap_ci(units, stat) == M.bootstrap_ci(units, stat)
     lo, hi = M.bootstrap_ci(units, stat)
     assert lo < 9.5 < hi
+
+
+def test_translation_collision_counts_identical_translations_per_variant_type():
+    from bench.metrics import translation_collision
+
+    variants = [
+        {"id": "t3-001", "variant_of": "t1-001", "variant_type": "hiragana"},
+        {"id": "t3-002", "variant_of": "t1-001", "variant_type": "katakana_halfwidth"},
+        {"id": "t3-003", "variant_of": "t1-001", "variant_type": "emoji_kaomoji"},
+    ]
+    translations = {
+        "t1-001": {"translation": "Shipped today."},
+        "t3-001": {"translation": "Shipped today."},          # collided with the base
+        "t3-002": {"translation": "Shipped it out today."},   # still distinct
+        "t3-003": {"translation": "Shipped today. 📦"},
+    }
+    out = translation_collision(variants, translations)
+    assert out["n"] == 3 and out["overall"] == 1 / 3
+    assert out["by_variant_type"]["hiragana"]["collision"] == 1.0
+    assert out["by_variant_type"]["katakana_halfwidth"]["collision"] == 0.0
+
+
+def test_translation_collision_skips_examples_without_a_translation():
+    from bench.metrics import translation_collision
+
+    variants = [{"id": "t3-001", "variant_of": "t1-001", "variant_type": "hiragana"}]
+    assert translation_collision(variants, {})["overall"] is None
+    assert translation_collision(variants, {})["n"] == 0

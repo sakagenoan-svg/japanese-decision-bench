@@ -13,7 +13,7 @@ JSONL files. The tests fail if the two differ.
 
 | File | Task | Rows |
 |---|---|---:|
-| `t1_moderation.jsonl` | T1 Choice: `ok` / `harassment` / `scam` / `resale_spam` | 30 |
+| `t1_moderation.jsonl` | T1 Choice: `ok` / `harassment` / `scam_risk` / `resale_spam` | 30 |
 | `t2_politeness_anger.jsonl` | T2 Score: 0 / 1 / 2 | 30 |
 | `t3_surface_variants.jsonl` | T3 Choice (variants of 10 T1 items) | 40 |
 | `t4_ellipsis.jsonl` | T4 Choice: `accept` / `reject` / `question` / `other` | 30 |

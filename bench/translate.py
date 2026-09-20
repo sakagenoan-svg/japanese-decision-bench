@@ -2,8 +2,9 @@
 
     uv run python -m bench.translate            # translates examples missing from data/translations/en.jsonl
 
-Translations are produced once, reviewed, committed, and then frozen with the protocol. They are never
-generated during a benchmark run. Translation cost/latency is recorded separately from benchmark latency.
+Translations are produced once, committed, and then frozen with the protocol; they are audited against
+the Japanese source but never post-edited, and never generated during a benchmark run (PROTOCOL.md 2.1).
+Translation cost/latency is recorded separately from benchmark latency.
 
 The translator is instructed to translate faithfully, preserving tone, sarcasm, politeness level, emoji and
 slang register, and not to explain or normalize them. For T4 the context/target structure is preserved.
@@ -29,6 +30,14 @@ SYSTEM = (
 )
 
 
+def strip_code_fence(text: str) -> str:
+    """Unwrap ```json ... ``` if the translator wrapped structured output in a fence."""
+    if not text.startswith("```"):
+        return text
+    body = text.split("\n", 1)[1] if "\n" in text else ""
+    return body.rsplit("```", 1)[0].strip()
+
+
 def translate_one(client, state) -> tuple[object, dict]:
     is_json = not isinstance(state, str)
     text = json.dumps(state, ensure_ascii=False, indent=2) if is_json else state
@@ -43,7 +52,7 @@ def translate_one(client, state) -> tuple[object, dict]:
     if resp.stop_reason != "end_turn":
         raise RuntimeError(f"stop_reason={resp.stop_reason}")
     out = "".join(b.text for b in resp.content if b.type == "text").strip()
-    translation = json.loads(out) if is_json else out
+    translation = json.loads(strip_code_fence(out)) if is_json else out
     if is_json and set(translation) != set(state):
         raise RuntimeError("translated JSON changed structure")
     meta = {"latency_ms": round(latency_ms, 1), "input_tokens": resp.usage.input_tokens,
@@ -75,6 +84,7 @@ def main(argv: list[str] | None = None) -> None:
             "translation": translation,
             "translator_model": TRANSLATOR_MODEL,
             "translated_at": dt.datetime.now(dt.UTC).isoformat(),
+            "review_status": "pending",
             **meta,
         })
         if i % 10 == 0:
@@ -82,6 +92,8 @@ def main(argv: list[str] | None = None) -> None:
             print(f"  {i}/{len(todo)}")
     write_jsonl(TRANSLATIONS_PATH, rows)
     print(f"wrote {TRANSLATIONS_PATH} ({len(rows)} rows, {len(todo)} new)")
+    print("next: `uv run python -m bench.validate` checks the frozen translations "
+          "(rows, pinned snapshot, source, T4 structure, non-empty, digest)")
 
 
 if __name__ == "__main__":

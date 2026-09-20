@@ -16,13 +16,26 @@ valid result: large differences, small differences, or none.
 **RQ1.** How does classification and scoring behave on indirect expressions, sarcasm, polite anger and omitted
 subjects (T1, T2, T4)?
 
-**RQ2.** How do results change across three conditions?
+**RQ2.** How do results change across three conditions, **within one provider**? The baseline is evaluated
+only under condition A, as an external reference point in the native Japanese condition; A/B/C is not run as a
+factorial comparison across providers (PROTOCOL.md §2.2).
 
 | Condition | State | Questions / criteria | Interpretation |
 |---|---|---|---|
 | A | Japanese | Japanese | Direct Japanese use |
 | B | Japanese | English | Effect of question/criteria language, with the state held fixed |
 | C | Machine-translated English | English | Translation *pipeline*, not a pure language effect: translation errors and normalization are part of the treatment |
+
+Condition C is `raw machine translation -> English questions -> decision model`. The frozen translations are
+**machine-translated once, structurally validated, and AI-audited for translation drift; not human
+post-edited**. Hand-correcting them would measure `machine translation -> human post-edit -> decision model`,
+a different pipeline that hides the translation errors real users would hit. A curated-translation variant, if
+it is ever run, is **exploratory**, reported separately, and never overwrites the raw translations.
+
+The audit compared all 160 translations against their Japanese source and is recorded with the run. It is an
+AI-assisted audit, not a bilingual human review: the maintainer reviewed the audit findings and approved
+retaining the frozen raw translations, but did not independently verify English pragmatics. Nothing in this
+benchmark describes the translations as human-reviewed or human-validated.
 
 **RQ3.** How much do predictions change under surface-form variation (T3)?
 
@@ -34,7 +47,7 @@ All texts are synthetic and set in a fictional peer-to-peer goods exchange servi
 
 ### T1 — Indirect / sarcastic moderation (Choice, 30)
 
-Labels: `ok` (8), `harassment` (8), `scam` (7), `resale_spam` (7). Items that would need more than one label are
+Labels: `ok` (8), `harassment` (8), `scam_risk` (7), `resale_spam` (7). Items that would need more than one label are
 avoided. Hard cases include sarcasm phrased as praise, insults in honorific language, veiled threats, and
 platform-specific scams (for example, asking for a receipt rating before the item arrives). Non-sarcastic uses
 of the same surface phrases act as controls (e.g. a genuine 「さすがですね」).
@@ -46,7 +59,7 @@ written in keigo, so politeness and anger point in opposite directions.
 
 ### T3 — Surface-form robustness (Choice, 40)
 
-Ten T1 items (3 `ok`, 3 `harassment`, 2 `scam`, 2 `resale_spam`) were marked `t3_base` **before any model
+Ten T1 items (3 `ok`, 3 `harassment`, 2 `scam_risk`, 2 `resale_spam`) were marked `t3_base` **before any model
 output existed**. They were chosen for comparatively unambiguous gold labels. Each has four variants:
 
 | `variant_type` | Construction |
@@ -61,6 +74,19 @@ prediction for its base under the same model and condition.
 
 Emoji and slang can shift pragmatics as well as spelling. The construct is therefore called *surface-form*
 robustness, and the per-variant breakdown is always reported.
+
+**T3 under condition C measures something different.** Japanese surface variation passes through machine
+translation before the model sees it, so the English inputs may carry less of the variation than the Japanese
+ones did (writing-system variants have no English counterpart at all), and the translator may also mistranslate
+one variant and not another. A condition C flip therefore combines three sources — the decision model,
+translation normalization, and translation errors — and is reported as *translation-pipeline* surface-form
+robustness. It is not compared with conditions A and B as if it were a property of the model. Two diagnostics
+are recorded alongside the flip rate, per `variant_type`:
+
+| Diagnostic | Definition | Source |
+|---|---|---|
+| Translation collision | share of variants whose English translation is identical to their base's | `bench/metrics.py` (`translation_collision`), computed from the frozen translations |
+| Translation drift | share of variants the translation audit flagged as changing meaning, polarity, register or speaker | the translation audit record, not the harness |
 
 ### T4 — Ellipsis / context (Choice, 30)
 
@@ -154,6 +180,7 @@ Prediction rules, identical across providers:
 | | Gold retention | among bases predicted correctly on the original, share of their variants still correct |
 | | Confidence delta | mean `certainty(variant) − certainty(original)` |
 | | Probability delta | mean `p_variant(gold) − p_original(gold)` |
+| | Translation collision (condition C only) | share of variants whose English translation equals their base's |
 | T5 | AUROC (primary) | Mann–Whitney, ties count ½ |
 | | Brier score | mean `(p − y)²` |
 | | Probability delta by level | mean `p(level) − p(clean)` for the same base, plus its absolute value |

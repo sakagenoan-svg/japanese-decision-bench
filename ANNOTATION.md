@@ -17,7 +17,10 @@ what the words literally say. Label each message on its own, using only the text
 |---|---|---|
 | `ok` | normal contact, thanks, questions, legitimate complaints, polite declines | the message is sarcastic or demeaning in effect |
 | `harassment` | mocks, insults, belittles or intimidates the other party, **including** praise that is sarcastic in context, keigo insults, and veiled threats | a complaint that is stated plainly without attacking the person |
-| `scam` | tries to move payment or communication off-platform, requests prepayment, credentials, card details, or a receipt rating before delivery | a genuine off-platform question with no deceptive element (not present in v0.1) |
+| `scam_risk` | tries to move payment or communication off-platform, requests prepayment, credentials, card details, or a receipt rating before delivery | a genuine off-platform question with no deceptive element (not present in v0.1) |
+
+`scam_risk` does not assert that fraud is established: it marks an exchange whose *risk* of fraud is high.
+Moving a conversation off-platform is labelled on that risk, not on a finding that the writer is a fraudster.
 | `resale_spam` | bulk or for-profit resale promotion, buy-ups for resale, markups on limited goods | an individual selling one item they own |
 
 Sarcasm cue examples: praise that contradicts a stated fact (「さすが、発送が早いですね（3週間待ちました）」),

@@ -2,7 +2,8 @@
 
 A small, reproducible benchmark for structured AI decision models on Japanese-specific language challenges.
 
-> **Status:** Work in progress — the dataset and protocol are currently being finalized.
+> **Status:** The dataset and protocol are locked as `protocol-v1`. The benchmark has been run
+> privately; no provider-specific results are published here.
 
 日本語での詳しい解説は、公開後に Zenn 記事として追加する予定です。
 
@@ -47,7 +48,7 @@ See [DESIGN.md](./DESIGN.md) for the full design and [PROTOCOL.md](./PROTOCOL.md
 
 | Task | Focus | Type | Size |
 | ---- | ----- | ---- | ---: |
-| T1 | Indirect / sarcastic moderation (`ok` / `harassment` / `scam` / `resale_spam`) | Choice | 30 |
+| T1 | Indirect / sarcastic moderation (`ok` / `harassment` / `scam_risk` / `resale_spam`) | Choice | 30 |
 | T2 | Polite anger intensity (0 neutral / 1 calm dissatisfaction / 2 strong anger) | Score | 30 |
 | T3 | Surface-form robustness | Choice | 40 derived variants |
 | T4 | Ellipsis / context dependency (`accept` / `reject` / `question` / `other`) | Choice | 30 |
@@ -86,7 +87,17 @@ certainty. Emoji and slang can also change pragmatics, not only spelling. For th
 | C | Machine-translated English | English |
 
 Condition C is treated as a translation preprocessing pipeline, not as a pure language-isolation experiment.
-Translations are generated once, reviewed, frozen in `data/translations/`, and never regenerated during a run.
+It is evaluated end to end as `raw machine translation -> English questions -> decision model`.
+
+The translations are **machine-translated once with a pinned model snapshot, frozen, structurally validated,
+and AI-audited for translation drift; they are not human post-edited**. Correcting them by hand would turn the
+condition into `machine translation -> human post-edit -> decision model` and hide the translation errors that
+a real pipeline produces, so known failures — meaning reversals, dropped content, added explicitness,
+corrupted half-width katakana — are kept and reported as part of what condition C measures.
+
+The maintainer reviewed the audit findings and approved retaining the frozen raw translations, but did not
+independently perform a bilingual translation review. The translations are therefore **not** described as
+human-reviewed or human-validated. See [PROTOCOL.md](./PROTOCOL.md) §2.1.
 
 ## Providers
 
@@ -124,7 +135,14 @@ The dataset, labels, questions, model settings, metrics, and exclusion rules are
 benchmark run. Any experiment added after inspecting results is marked as exploratory. Changes after the freeze
 require a new protocol version and a [CHANGELOG](./CHANGELOG.md) entry.
 
-The protocol is **not locked yet**. A link to the `protocol-v1` tag will appear here once it exists.
+The protocol is **locked as `protocol-v1`**, created before any benchmark prediction was produced or
+inspected. The baseline is evaluated under condition A only; see [PROTOCOL.md](./PROTOCOL.md) §2.2.
+
+**Benchmark execution under `protocol-v1` has been completed privately. No results are published.**
+The runs, the metrics they produced and the review of them are held privately pending the publication
+requirements that apply to the providers involved, and this repository states no scores, no comparison
+and no ranking. Everything needed to reproduce the benchmark against your own providers is here; the
+outcome of the maintainer's runs is not.
 
 ## Metrics
 
@@ -200,11 +218,11 @@ evaluation is complete.
 - [x] Dataset v0.1 draft (160 inputs)
 - [x] Japanese / English question definitions
 - [x] Evaluation harness (offline-tested)
-- [ ] Gold-label review of the v0.1 draft
-- [ ] Frozen English translations for condition C
-- [ ] Protocol lock (`protocol-v1`)
-- [ ] Full benchmark run
-- [ ] Result report
+- [x] Gold-label review of the v0.1 draft (Japanese, by the maintainer)
+- [x] Frozen English translations for condition C (generated once, validated, AI-audited for drift)
+- [x] Protocol lock (`protocol-v1`)
+- [x] Full benchmark run (completed privately; results unpublished)
+- [x] Result report (private)
 - [ ] Second annotator pass
 - [ ] Japanese Zenn article
 
@@ -216,7 +234,14 @@ evaluation is complete.
 - Authored examples were drafted with LLM assistance. Examples written this way may be easier or harder for
   models than naturally occurring text, including for LLM baselines.
 - Model behavior can change between versions. Results apply only to the recorded model IDs and dates.
-- Condition C measures a translation pipeline, not a pure language effect.
+- Condition C measures a translation pipeline, not a pure language effect. Its translations are never
+  hand-corrected, so translation errors are part of the measured system.
+- The condition C translations were audited for drift by an AI-assisted comparison against the Japanese
+  source, not by an independent bilingual human reviewer. Translation-drift findings therefore carry the
+  reliability of that method, and the audit is documented rather than claimed as human validation.
+- T3 under condition C measures *translation-pipeline* surface-form robustness, not model surface-form
+  robustness. Japanese surface variation is partly normalized by machine translation before the model sees
+  it, so condition C flip rates are not comparable with conditions A and B as a model property.
 - API latency includes network and provider-route effects. It is not model inference speed.
 
 ## License

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,17 @@ def load_translations(path: Path = TRANSLATIONS_PATH) -> dict[str, dict]:
     if not path.exists():
         return {}
     return {row["id"]: row for row in read_jsonl(path)}
+
+
+def translation_digest(rows: list[dict]) -> str:
+    """Hash of the frozen translation content only: id + source + translation.
+
+    Review metadata is deliberately excluded, so the digest answers one question: has any translation text
+    changed since it was generated? The protocol pins the expected value in `bench.config`.
+    """
+    payload = [{"id": r["id"], "source": r["source"], "translation": r["translation"]}
+               for r in sorted(rows, key=lambda r: r["id"])]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def source_state(example: dict) -> Any:

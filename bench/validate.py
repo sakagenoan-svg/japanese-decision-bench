@@ -10,8 +10,17 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from bench.config import DATA_DIR, QUESTIONS_DIR, SOURCES, TASKS
-from bench.dataset import load_task, read_jsonl
+from bench.config import (
+    DATA_DIR,
+    QUESTIONS_DIR,
+    SOURCES,
+    TASKS,
+    TRANSLATION_REVIEW_STATUSES,
+    TRANSLATIONS_DIGEST,
+    TRANSLATIONS_ROWS,
+    TRANSLATOR_MODEL,
+)
+from bench.dataset import load_task, read_jsonl, source_state, translation_digest
 
 REQUIRED = ["id", "task", "state", "context", "label", "label_b", "agreed", "source", "variant_of",
             "variant_type", "note"]
@@ -195,17 +204,75 @@ def _check_questions(questions_dir: Path) -> list[str]:
     return errors
 
 
+def translation_structure_errors(example_id: str, source, translation) -> list[str]:
+    """A structured (T4) translation must keep the speaker structure; every translation must be non-empty."""
+    if isinstance(source, dict):
+        if not isinstance(translation, dict):
+            return [f"translation {example_id}: structured source but the translation is not an object"]
+        if set(translation) != set(source):
+            return [f"translation {example_id}: top-level keys differ from the source"]
+        errors = []
+        before, after = source.get("context") or [], translation.get("context")
+        if not isinstance(after, list) or len(after) != len(before):
+            errors.append(f"translation {example_id}: context turn count differs from the source")
+        else:
+            for i, (o, n) in enumerate(zip(before, after, strict=True)):
+                if not isinstance(n, dict) or set(n) != set(o):
+                    errors.append(f"translation {example_id}: context[{i}] keys differ from the source")
+                elif n.get("speaker") != o.get("speaker"):
+                    errors.append(f"translation {example_id}: context[{i}] speaker differs from the source")
+                elif not isinstance(n.get("text"), str) or not n["text"].strip():
+                    errors.append(f"translation {example_id}: context[{i}] text is empty")
+        if not isinstance(translation.get("target"), str) or not translation["target"].strip():
+            errors.append(f"translation {example_id}: target is empty")
+        return errors
+    if not isinstance(translation, str) or not translation.strip():
+        return [f"translation {example_id}: empty translation"]
+    return []
+
+
 def validate_translations(path: Path, data_dir: Path = DATA_DIR) -> list[str]:
+    """Protocol gate for the frozen condition C translations (PROTOCOL.md §2.1).
+
+    The translations are generated once and never edited, so this checks the frozen artifact itself:
+    every example present exactly once, the pinned translator snapshot, the source matching the current
+    dataset, structure and non-emptiness, and the digest over `id + source + translation`.
+    """
     if not path.exists():
         return []
-    ids = {r["id"] for task in TASKS for r in load_task(task, data_dir)}
+    examples = {r["id"]: r for task in TASKS for r in load_task(task, data_dir)}
+    rows = read_jsonl(path)
     errors = []
-    for row in read_jsonl(path):
-        for k in ("id", "source", "translation", "translator_model", "translated_at"):
+    seen: set[str] = set()
+    for row in rows:
+        example_id = row.get("id")
+        for k in ("id", "source", "translation", "translator_model", "translated_at", "review_status"):
             if k not in row:
-                errors.append(f"translation {row.get('id')}: missing {k}")
-        if row.get("id") not in ids:
-            errors.append(f"translation {row.get('id')}: unknown example id")
+                errors.append(f"translation {example_id}: missing {k}")
+        if "review_status" in row and row["review_status"] not in TRANSLATION_REVIEW_STATUSES:
+            errors.append(f"translation {example_id}: invalid review_status {row['review_status']!r}")
+        if example_id not in examples:
+            errors.append(f"translation {example_id}: unknown example id")
+            continue
+        if example_id in seen:
+            errors.append(f"translation {example_id}: duplicate row")
+        seen.add(example_id)
+        if row.get("translator_model") != TRANSLATOR_MODEL:
+            errors.append(f"translation {example_id}: translator_model {row.get('translator_model')!r} "
+                          f"is not the pinned snapshot {TRANSLATOR_MODEL!r}")
+        if row.get("source") != source_state(examples[example_id]):
+            errors.append(f"translation {example_id}: source differs from the current dataset")
+        if "translation" in row:
+            errors += translation_structure_errors(example_id, row.get("source"), row["translation"])
+    missing = [i for i in examples if i not in seen]
+    errors += [f"translation {i}: missing from the frozen translations" for i in sorted(missing)]
+    if len(rows) != TRANSLATIONS_ROWS:
+        errors.append(f"translations: {len(rows)} rows, expected {TRANSLATIONS_ROWS}")
+    if not errors:
+        digest = translation_digest(rows)
+        if digest != TRANSLATIONS_DIGEST:
+            errors.append(f"translations: digest {digest} does not match the recorded "
+                          f"{TRANSLATIONS_DIGEST} — a translation was edited or regenerated")
     return errors
 
 

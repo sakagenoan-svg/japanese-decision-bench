@@ -6,6 +6,7 @@ import pytest
 
 from bench.clients.adapter import LLMAdapter, build_prompt, to_canonical_answer
 from bench.clients.base import ProviderError, backoff_delay
+from bench.config import PROVIDERS
 from bench.dataset import load_question
 from bench.questions import AnswerError, normalize_answer, to_request
 
@@ -13,9 +14,9 @@ from bench.questions import AnswerError, normalize_answer, to_request
 def test_questions_map_back_to_label_space():
     q = load_question("t1_moderation", "ja")
     sq = to_request(q)
-    assert list(sq["criteria"]) == ["問題なし", "嫌がらせ", "詐欺", "転売スパム"]
+    assert list(sq["criteria"]) == ["問題なし", "嫌がらせ", "詐欺の疑い", "転売スパム"]
     ans = {"type": "choice", "choice": "嫌がらせ",
-           "probabilities": {"問題なし": 0.1, "嫌がらせ": 0.7, "詐欺": 0.1, "転売スパム": 0.1}, "confidence": 0.6}
+           "probabilities": {"問題なし": 0.1, "嫌がらせ": 0.7, "詐欺の疑い": 0.1, "転売スパム": 0.1}, "confidence": 0.6}
     norm = normalize_answer(q, ans)
     assert norm["prediction"] == "harassment"
     assert norm["probabilities"]["harassment"] == 0.7
@@ -68,10 +69,18 @@ def test_adapter_normalizes_self_reported_probabilities():
 
 
 def _fake_client(content, capture=None):
+    """Stand-in for anthropic.Anthropic whose create() mirrors the SDK v1 signature.
+
+    It takes the keywords the real `messages.create()` accepts and **no `**kwargs`**, so passing a parameter
+    the SDK dropped (temperature, top_p, top_k) raises TypeError here instead of at run time. A permissive
+    fake is what let the baseline adapter ship a `temperature=` call that SDK 1.7.0 rejects.
+    """
+
     class FakeMessages:
-        def create(self, **kw):
+        def create(self, *, model, max_tokens, system, messages, output_config=None, extra_body=None):
             if capture is not None:
-                capture.update(kw)
+                capture.update(model=model, max_tokens=max_tokens, system=system, messages=messages,
+                               output_config=output_config, extra_body=extra_body)
             return SimpleNamespace(
                 stop_reason="end_turn", model="claude-haiku-4-5-20251001", content=content,
                 usage=SimpleNamespace(input_tokens=50, output_tokens=8),
@@ -87,9 +96,38 @@ def test_llm_adapter_with_fake_client():
     adapter = LLMAdapter(model="claude-haiku-4-5-20251001", lang="en", client=_fake_client(content, captured))
     res = adapter.ask("state", {"type": "binary", "instructions": "Refund?", "criteria": {"true": "y", "false": "n"}})
     assert res.answer == {"type": "binary", "p": 0.2}
-    assert captured["temperature"] == 0.0
     assert captured["output_config"]["format"]["type"] == "json_schema"
+    assert captured["model"] == "claude-haiku-4-5-20251001"
+    assert captured["max_tokens"] == PROVIDERS["baseline"]["max_tokens"]
     assert "thinking" not in captured
+
+
+def test_anthropic_v1_uses_extra_body_for_temperature():
+    """Regression: SDK v1 dropped `temperature` from messages.create(), the API still takes it.
+
+    The protocol's sampling setting (temperature 0) is unchanged; only how it reaches the request body is.
+    The strict fake above fails with TypeError if the adapter goes back to passing it directly, and no other
+    sampling parameter may appear alongside it.
+    """
+    captured = {}
+    content = [SimpleNamespace(type="text", text=json.dumps({"p_yes": 0.2}))]
+    adapter = LLMAdapter(model="claude-haiku-4-5-20251001", lang="en", client=_fake_client(content, captured))
+    adapter.ask("state", {"type": "binary", "instructions": "Refund?", "criteria": {"true": "y", "false": "n"}})
+    assert captured["extra_body"] == {"temperature": 0.0}
+    assert captured["extra_body"]["temperature"] == PROVIDERS["baseline"]["temperature"] == 0.0
+    assert "temperature" not in captured  # never a direct keyword again
+    assert set(captured["extra_body"]) == {"temperature"}  # no top_p / top_k crept in
+
+
+def test_real_sdk_rejects_a_direct_temperature_keyword():
+    """Pins why the fix exists: the installed SDK's own signature has no `temperature`."""
+    import inspect
+
+    import anthropic
+
+    params = inspect.signature(anthropic.Anthropic(api_key="unused").messages.create).parameters
+    assert "temperature" not in params
+    assert "extra_body" in params
 
 
 def test_llm_adapter_empty_or_non_json_is_a_provider_error():

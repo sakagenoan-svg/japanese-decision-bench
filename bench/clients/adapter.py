@@ -145,6 +145,18 @@ class LLMAdapter:
     def close(self) -> None:
         pass
 
+    def _sampling(self) -> dict:
+        """Sampling settings for the request body.
+
+        The protocol fixes temperature at 0. The Anthropic Python SDK v1 dropped `temperature` (and `top_p`
+        / `top_k`) from the generated `messages.create()` signature, while the API still accepts it for this
+        model, so it travels in `extra_body`. This is a transport detail: the frozen setting is unchanged.
+        Only temperature is sent; no other sampling parameter is introduced.
+        """
+        if self.temperature is None:
+            return {}
+        return {"extra_body": {"temperature": self.temperature}}
+
     def ask(self, state: Any, question: dict) -> CallResult:
         prompt, schema = build_prompt(state, question, self.lang)
         errors: list[str] = []
@@ -155,10 +167,10 @@ class LLMAdapter:
                 resp = self.client.messages.create(
                     model=self.model,
                     max_tokens=self.max_tokens,
-                    temperature=self.temperature,
                     system=SYSTEM_PROMPT[self.lang],
                     messages=[{"role": "user", "content": prompt}],
                     output_config={"format": {"type": "json_schema", "schema": schema}},
+                    **self._sampling(),
                 )
             except anthropic.RateLimitError:
                 errors.append(f"attempt {attempt}: 429")

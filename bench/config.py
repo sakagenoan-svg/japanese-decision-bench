@@ -31,7 +31,7 @@ TASKS: dict[str, dict] = {
         "file": "t1_moderation.jsonl",
         "question": "t1",
         "type": "choice",
-        "labels": ["ok", "harassment", "scam", "resale_spam"],
+        "labels": ["ok", "harassment", "scam_risk", "resale_spam"],
         "expected_count": 30,
         "min_per_label": 5,
     },
@@ -46,7 +46,7 @@ TASKS: dict[str, dict] = {
         "file": "t3_surface_variants.jsonl",
         "question": "t1",  # T3 re-asks the T1 question on surface variants
         "type": "choice",
-        "labels": ["ok", "harassment", "scam", "resale_spam"],
+        "labels": ["ok", "harassment", "scam_risk", "resale_spam"],
         "expected_count": 40,
         "base_task": "t1_moderation",
         "expected_bases": 10,
@@ -115,9 +115,21 @@ PROVIDERS = {
 FORBIDDEN_MODEL_SUFFIXES = ("-latest", "-preview")
 
 # Translator for condition C. Translations are generated once and frozen in data/translations/en.jsonl.
-TRANSLATOR_MODEL = "claude-sonnet-5"
+# Pinned snapshot, same as the baseline provider: the protocol fixes translation to one immutable model.
+TRANSLATOR_MODEL = "claude-haiku-4-5-20251001"
 TRANSLATOR_CREDENTIAL = "baseline"
-TRANSLATOR_PRICE = {"input_per_mtok": 2.0, "output_per_mtok": 10.0, "checked_at": "2026-09-20"}
+TRANSLATOR_PRICE = {"input_per_mtok": 1.0, "output_per_mtok": 5.0, "checked_at": "2026-09-20"}
+
+# SHA-256 over `id + source + translation` of data/translations/en.jsonl, recorded when the translations
+# were generated. Validation fails if any translation text differs from the generated output, so the digest
+# is what enforces "generated once, never post-edited, never regenerated".
+TRANSLATIONS_DIGEST = "9da276b1a060936430b41f2ed4db4d61d6c40dce46a3aed8d7d0f20e773d346b"
+TRANSLATIONS_ROWS = 160
+
+# `review_status` is a legacy field from an earlier design in which a bilingual reviewer was to go through
+# every translation. That review is not part of the protocol (see PROTOCOL.md §2.1), so every row stays
+# "pending" and the field gates nothing. It is kept because the frozen file must not be rewritten.
+TRANSLATION_REVIEW_STATUSES = ("pending", "reviewed")
 
 # ---------------------------------------------------------------- metric definitions
 

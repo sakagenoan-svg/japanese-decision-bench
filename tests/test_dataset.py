@@ -117,3 +117,87 @@ def test_dataset_build_is_reproducible(tmp_path):
     for name, rows in built.items():
         assert rows == read_jsonl(DATA_DIR / name), f"{name} differs from scripts/build_dataset.py output"
     json.dumps(built, ensure_ascii=False)
+
+
+def test_validate_translations_checks_row_fields(tmp_path):
+    from bench.validate import validate_translations
+
+    ex = load_all()["t1_moderation"][0]
+    row = {"id": ex["id"], "source": ex["state"], "translation": "hi",
+           "translator_model": "m", "translated_at": "2026-01-01T00:00:00+00:00"}
+    path = tmp_path / "en.jsonl"
+    write_jsonl(path, [row])
+    assert any("missing review_status" in e for e in validate_translations(path))
+    write_jsonl(path, [{**row, "review_status": "done"}])
+    errors = validate_translations(path)
+    assert any("invalid review_status" in e for e in errors)
+    assert any("is not the pinned snapshot" in e for e in errors)
+    assert any("missing from the frozen translations" in e for e in errors)
+
+
+def test_shipped_translations_pass_the_protocol_gate():
+    """The frozen condition C artifact: 160 rows, pinned snapshot, digest unchanged since generation."""
+    from bench.config import TRANSLATIONS_PATH
+    from bench.validate import validate_translations
+
+    assert validate_translations(TRANSLATIONS_PATH) == []
+
+
+def test_validate_translations_detects_an_edited_or_regenerated_translation(tmp_path):
+    from bench.config import TRANSLATIONS_PATH
+    from bench.validate import validate_translations
+
+    if not TRANSLATIONS_PATH.exists():
+        pytest.skip("no frozen translations in this checkout")
+    rows = read_jsonl(TRANSLATIONS_PATH)
+    path = tmp_path / "en.jsonl"
+    edited = [{**r, "translation": r["translation"] + "!"} if isinstance(r["translation"], str) and r is rows[0]
+              else r for r in rows]
+    write_jsonl(path, edited)
+    assert any("digest" in e for e in validate_translations(path))
+    write_jsonl(path, [{**r, "review_status": "reviewed"} for r in rows])
+    assert validate_translations(path) == []  # review metadata is not part of the digest
+
+
+def test_validate_translations_detects_empty_and_structural_damage(tmp_path):
+    from bench.config import TRANSLATIONS_PATH
+    from bench.validate import validate_translations
+
+    if not TRANSLATIONS_PATH.exists():
+        pytest.skip("no frozen translations in this checkout")
+    rows = read_jsonl(TRANSLATIONS_PATH)
+    path = tmp_path / "en.jsonl"
+
+    def replace(example_id, translation):
+        write_jsonl(path, [{**r, "translation": translation} if r["id"] == example_id else r for r in rows])
+        return validate_translations(path)
+
+    assert any("empty translation" in e for e in replace("t1-001", "   "))
+    t4 = next(r for r in rows if r["id"].startswith("t4"))
+    broken = {**t4["translation"], "context": t4["translation"]["context"][:-1]}
+    assert any("context turn count differs" in e for e in replace(t4["id"], broken))
+    flipped = {**t4["translation"],
+               "context": [{**turn, "speaker": "Z"} for turn in t4["translation"]["context"]]}
+    assert any("speaker differs from the source" in e for e in replace(t4["id"], flipped))
+
+
+def _fake_client(text):
+    from types import SimpleNamespace
+
+    block = SimpleNamespace(type="text", text=text)
+    resp = SimpleNamespace(stop_reason="end_turn", content=[block], model="m",
+                           usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+    return SimpleNamespace(messages=SimpleNamespace(create=lambda **kw: resp))
+
+
+def test_translate_one_handles_plain_text_and_fenced_json():
+    from bench.translate import translate_one
+
+    assert translate_one(_fake_client("Hello there"), "こんにちは")[0] == "Hello there"
+    state = {"context": [{"speaker": "A", "text": "六時？"}], "target": "それで"}
+    fenced = '```json\n{"context": [{"speaker": "A", "text": "Six?"}], "target": "That works"}\n```'
+    out, meta = translate_one(_fake_client(fenced), state)
+    assert out["target"] == "That works" and out["context"][0]["speaker"] == "A"
+    assert meta["returned_model"] == "m"
+    with pytest.raises(RuntimeError, match="changed structure"):
+        translate_one(_fake_client('{"target": "only target"}'), state)

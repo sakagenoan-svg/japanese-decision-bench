@@ -5,6 +5,7 @@ All functions take plain lists. Record-level helpers at the bottom turn run reco
 
 from __future__ import annotations
 
+import json
 import math
 import random
 from collections import defaultdict
@@ -56,6 +57,38 @@ def confusion(gold: Sequence, pred: Sequence, labels: Sequence) -> dict:
     for g, p in zip(gold, pred, strict=True):
         m[g][p] += 1
     return m
+
+
+# ---------------------------------------------------------------- condition C translation diagnostics
+
+
+def translation_collision(variants: Sequence[dict], translations: dict[str, dict]) -> dict:
+    """Share of T3 variants whose English translation is identical to their base's (condition C only).
+
+    A collision means the Japanese surface difference never reaches the model: machine translation erased it
+    before the input was formed. It is a property of the translation pipeline, not of the model, and it is
+    reported next to the condition C flip rate so the two are not confused.
+    """
+
+    def text(example_id: str) -> str | None:
+        row = translations.get(example_id)
+        if row is None:
+            return None
+        value = row["translation"]
+        return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+    by_type: dict[str, list[bool]] = defaultdict(list)
+    for v in variants:
+        variant_text, base_text = text(v["id"]), text(v.get("variant_of"))
+        if variant_text is None or base_text is None:
+            continue
+        by_type[v["variant_type"]].append(variant_text == base_text)
+    hits = [h for hs in by_type.values() for h in hs]
+    return {
+        "overall": (sum(hits) / len(hits)) if hits else None,
+        "n": len(hits),
+        "by_variant_type": {k: {"collision": sum(v) / len(v), "n": len(v)} for k, v in sorted(by_type.items())},
+    }
 
 
 # ---------------------------------------------------------------- ordinal (T2)
